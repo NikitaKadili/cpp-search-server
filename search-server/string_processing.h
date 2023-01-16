@@ -7,7 +7,7 @@
 // Разделить строку на вектор слов
 std::vector<std::string> SplitIntoWords(const std::string& text);
 
-// Возвращает словарь уникальный слов из строки
+// Возвращает словарь уникальных слов из строки
 template <typename StringContainer>
 std::set<std::string> MakeUniqueNonEmptyStrings(const StringContainer& strings) {
     std::set<std::string> non_empty_strings;

@@ -1,12 +1,5 @@
 #include "search_server.h"
 
-#include <algorithm>
-#include <cmath>
-#include <vector>
-#include <string>
-#include "string_processing.h"
-#include "document.h"
-
 using namespace std;
 
 // Конструктор преобразует строку в контейнер и вызывает шаблонный контруктор

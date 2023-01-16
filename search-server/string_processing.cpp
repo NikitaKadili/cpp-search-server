@@ -1,8 +1,5 @@
 #include "string_processing.h"
 
-#include <iostream>
-#include <set>
-
 using namespace std;
 
 vector<string> SplitIntoWords(const string& text) {

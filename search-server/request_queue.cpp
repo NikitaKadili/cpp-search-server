@@ -1,9 +1,6 @@
 #include "request_queue.h"
 
 #include <algorithm>
-#include <deque>
-#include <string>
-#include <vector>
 
 using namespace std;
 
