@@ -6,6 +6,7 @@
 #include "document.h"
 #include "search_server.h"
 
+/* Сохранение истории запросов за прошедшие сутки */
 class RequestQueue {
 public:
     explicit RequestQueue(const SearchServer& search_server);

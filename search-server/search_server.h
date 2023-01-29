@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <list>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -10,6 +11,7 @@
 #include <vector>
 #include "document.h"
 #include "string_processing.h"
+#include "log_duration.h"
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 const double DOUBLE_ACCURACY = 1e-6; // Точность сравнения десятичных дробей
@@ -41,12 +43,26 @@ public:
     // Возвращает кол-во документов
     int GetDocumentCount() const;
 
+    /*
     // Возвращает ID документа по порядковому номеру
     int GetDocumentId(int index) const;
+    */
+
+    // Возвращает итератор на начало document_ids_
+    std::list<int>::iterator begin();
+
+    // Возвращает итератор на конец document_ids_
+    std::list<int>::iterator end();
 
     // Сверяет запрос с конкретным документом, возвращает совпавшие слова и статус документа
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
         int document_id) const;
+
+    // Возвращает частоту слов в документе по его id
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+
+    // Удаление документа по его id
+    void RemoveDocument(int document_id);
 
 private:
     struct DocumentData {
@@ -56,7 +72,13 @@ private:
     const std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
-    std::vector<int> document_ids_;
+    std::list<int> document_ids_;
+
+    // Ключ - int id
+    // Значение - map<string, double> (слово, частота в док-те)
+    std::map<int, std::map<std::string, double>> id_to_words_and_freqs_;
+    // Пустой контейнер
+    std::map<std::string, double> empty_container_{};
 
     // Возвращает true, если строка является стоп-словом
     bool IsStopWord(const std::string& word) const;
@@ -112,6 +134,7 @@ SearchServer::SearchServer(const StringContainer& stop_words)
 template <typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query,
     DocumentPredicate document_predicate) const {
+    //LOG_DURATION_STREAM("Operation time", std::cout);
     const auto query = ParseQuery(raw_query);
 
     auto matched_documents = FindAllDocuments(query, document_predicate);

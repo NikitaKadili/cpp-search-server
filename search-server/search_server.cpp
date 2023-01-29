@@ -6,8 +6,7 @@ using namespace std;
 SearchServer::SearchServer(const string& stop_words_text)
     : SearchServer(
         SplitIntoWords(stop_words_text))  // Вызов шаблонного контруктора с контейнером
-{
-}
+{}
 
 // Добавление документа на сервер
 void SearchServer::AddDocument(int document_id, const string& document, DocumentStatus status,
@@ -20,6 +19,7 @@ void SearchServer::AddDocument(int document_id, const string& document, Document
     const double inv_word_count = 1.0 / words.size();
     for (const string& word : words) {
         word_to_document_freqs_[word][document_id] += inv_word_count;
+        id_to_words_and_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
     document_ids_.push_back(document_id);
@@ -45,15 +45,28 @@ int SearchServer::GetDocumentCount() const {
     return static_cast<int>(documents_.size());
 }
 
+/*
 // Возвращает ID документа по порядковому номеру
 // Если порядковый номер > количества документов - вызывает исключение
 int SearchServer::GetDocumentId(int index) const {
     return document_ids_.at(index);
 }
+*/
+
+// Возвращает итератор на начало document_ids_
+list<int>::iterator SearchServer::begin() {
+    return document_ids_.begin();
+}
+
+// Возвращает итератор на конец document_ids_
+list<int>::iterator SearchServer::end() {
+    return document_ids_.end();
+}
 
 // Сверяет запрос с конкретным документом, возвращает совпавшие слова и статус документа
 tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& raw_query,
     int document_id) const {
+    //LOG_DURATION_STREAM("Operation time"s, std::cout);
     const auto query = ParseQuery(raw_query);
 
     vector<string> matched_words;
@@ -75,6 +88,36 @@ tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& 
         }
     }
     return { matched_words, documents_.at(document_id).status };
+}
+
+// Возвращает частоту слов в документе по его id
+const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const {
+    try {
+        return id_to_words_and_freqs_.at(document_id);
+    }
+    catch ([[maybe_unused]] const out_of_range& ex) {
+        return empty_container_;
+    }
+}
+
+// Удаление документа по его id
+void SearchServer::RemoveDocument(int document_id) {
+    const auto list_iterator_to_remove = find(document_ids_.begin(), document_ids_.end(), document_id);
+
+    // Если такого id не существует, find вернет итератор на конец списка
+    if (list_iterator_to_remove == document_ids_.end()) {
+        return;
+    }
+
+    document_ids_.erase(list_iterator_to_remove); // Удаление из списка id
+    documents_.erase(document_id); // Удаление из документов
+    const auto words_from_doc = id_to_words_and_freqs_.at(document_id); // Создаем контейнер слов из удаляемого документа
+    id_to_words_and_freqs_.erase(document_id);
+
+    // Итерируемся по словам из удаляемого документа
+    for (const auto& [word, _] : words_from_doc) {
+        word_to_document_freqs_.at(word).erase(document_id);
+    }
 }
 
 // Возвращает true, если строка является стоп-словом
