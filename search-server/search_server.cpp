@@ -22,7 +22,7 @@ void SearchServer::AddDocument(int document_id, const string& document, Document
         id_to_words_and_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
-    document_ids_.push_back(document_id);
+    document_ids_.insert(document_id);
 }
 
 // Поиск документов с заданным статусом
@@ -54,12 +54,12 @@ int SearchServer::GetDocumentId(int index) const {
 */
 
 // Возвращает итератор на начало document_ids_
-list<int>::iterator SearchServer::begin() {
+set<int>::iterator SearchServer::begin() {
     return document_ids_.begin();
 }
 
 // Возвращает итератор на конец document_ids_
-list<int>::iterator SearchServer::end() {
+set<int>::iterator SearchServer::end() {
     return document_ids_.end();
 }
 
@@ -92,12 +92,12 @@ tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& 
 
 // Возвращает частоту слов в документе по его id
 const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const {
-    try {
-        return id_to_words_and_freqs_.at(document_id);
-    }
-    catch ([[maybe_unused]] const out_of_range& ex) {
-        return empty_container_;
-    }
+    static std::map<std::string, double> empty_container{}; // Пустой контейнер
+
+    auto it = id_to_words_and_freqs_.find(document_id);
+    return (it != id_to_words_and_freqs_.end()
+        ? it->second
+        : empty_container);
 }
 
 // Удаление документа по его id

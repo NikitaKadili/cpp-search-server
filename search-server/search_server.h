@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <list>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -49,10 +48,10 @@ public:
     */
 
     // Возвращает итератор на начало document_ids_
-    std::list<int>::iterator begin();
+    std::set<int>::iterator begin();
 
     // Возвращает итератор на конец document_ids_
-    std::list<int>::iterator end();
+    std::set<int>::iterator end();
 
     // Сверяет запрос с конкретным документом, возвращает совпавшие слова и статус документа
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
@@ -72,13 +71,11 @@ private:
     const std::set<std::string> stop_words_;
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
-    std::list<int> document_ids_;
+    std::set<int> document_ids_;
 
     // Ключ - int id
     // Значение - map<string, double> (слово, частота в док-те)
     std::map<int, std::map<std::string, double>> id_to_words_and_freqs_;
-    // Пустой контейнер
-    std::map<std::string, double> empty_container_{};
 
     // Возвращает true, если строка является стоп-словом
     bool IsStopWord(const std::string& word) const;
