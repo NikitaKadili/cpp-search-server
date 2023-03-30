@@ -2,12 +2,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
+#include <execution>
 #include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
+
+#include "concurrent_map.h"
 #include "document.h"
 #include "string_processing.h"
 #include "log_duration.h"
@@ -17,35 +22,55 @@ const double DOUBLE_ACCURACY = 1e-6; // Точность сравнения де
 
 class SearchServer {
 public:
+    // Конструктор преобразует строку const std::string& в контейнер и вызывает шаблонный контруктор
+    explicit SearchServer(const std::string& stop_words_text);
+
+    // Конструктор преобразует строку std::string_view в контейнер и вызывает шаблонный контруктор
+    explicit SearchServer(std::string_view stop_words_text);
+
     // Шаблонный контруктор проверяет и добавляет стоп-слова из шаблонного контейнера
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words);
 
-    // Конструктор преобразует строку в контейнер и вызывает шаблонный контруктор
-    explicit SearchServer(const std::string& stop_words_text);
-
     // Добавление документа на сервер
-    void AddDocument(int document_id, const std::string& document, DocumentStatus status,
+    void AddDocument(int document_id, std::string_view document, DocumentStatus status,
         const std::vector<int>& ratings);
 
     // Шаблонный метод ищет документы по предикату
     template <typename DocumentPredicate>
-    std::vector<Document> FindTopDocuments(const std::string& raw_query,
+    std::vector<Document> FindTopDocuments(std::string_view raw_query,
         DocumentPredicate document_predicate) const;
 
     // Поиск документов с заданным статусом
-    std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(std::string_view raw_query, DocumentStatus status) const;
 
     // Поиск документов по умолчанию (только актуальные)
-    std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
+    std::vector<Document> FindTopDocuments(std::string_view raw_query) const;
+
+    // Шаблонный метод ищет документы по предикату с заданной политикой исполнения (последовательной)
+    template <typename DocumentPredicate>
+    std::vector<Document> FindTopDocuments(const std::execution::sequenced_policy&, std::string_view raw_query,
+        DocumentPredicate document_predicate) const;
+
+    // Поиск документов с заданным статусом с заданной политикой исполнения (последовательной)
+    std::vector<Document> FindTopDocuments(const std::execution::sequenced_policy&, std::string_view raw_query, DocumentStatus status) const;
+
+    // Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения (последовательной)
+    std::vector<Document> FindTopDocuments(const std::execution::sequenced_policy&, std::string_view raw_query) const;
+
+    // Шаблонный метод ищет документы по предикату с заданной политикой исполнения (параллельной)
+    template <typename DocumentPredicate>
+    std::vector<Document> FindTopDocuments(const std::execution::parallel_policy&, std::string_view raw_query,
+        DocumentPredicate document_predicate) const;
+
+    // Поиск документов с заданным статусом с заданной политикой исполнения (параллельной)
+    std::vector<Document> FindTopDocuments(const std::execution::parallel_policy&, std::string_view raw_query, DocumentStatus status) const;
+
+    // Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения (параллельной)
+    std::vector<Document> FindTopDocuments(const std::execution::parallel_policy&, std::string_view raw_query) const;
 
     // Возвращает кол-во документов
     int GetDocumentCount() const;
-
-    /*
-    // Возвращает ID документа по порядковому номеру
-    int GetDocumentId(int index) const;
-    */
 
     // Возвращает итератор на начало document_ids_
     std::set<int>::iterator begin();
@@ -54,66 +79,91 @@ public:
     std::set<int>::iterator end();
 
     // Сверяет запрос с конкретным документом, возвращает совпавшие слова и статус документа
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(std::string_view raw_query,
         int document_id) const;
 
+    // Сверяет запрос с конкретным документом с заданной политикой исполнения (последовательной),
+    // возвращает совпавшие слова и статус документа
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::sequenced_policy&,
+        std::string_view raw_query, int document_id) const;
+
+    // Сверяет запрос с конкретным документом с заданной политикой исполнения (параллельной),
+    // возвращает совпавшие слова и статус документа
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(const std::execution::parallel_policy&,
+        std::string_view raw_query, int document_id) const;
+
     // Возвращает частоту слов в документе по его id
-    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    const std::map<std::string_view, double>& GetWordFrequencies(int document_id) const;
 
     // Удаление документа по его id
     void RemoveDocument(int document_id);
+
+    // Удаление документа по его id по заданной политике выполнения - последовательной
+    void RemoveDocument(const std::execution::sequenced_policy&, int document_id);
+
+    // Удаление документа по его id по заданной политике выполнения - параллельной
+    void RemoveDocument(const std::execution::parallel_policy&, int document_id);
 
 private:
     struct DocumentData {
         int rating;
         DocumentStatus status;
     };
-    const std::set<std::string> stop_words_;
-    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+    const std::set<std::string, std::less<>> stop_words_;
+    std::map<std::string_view, std::map<int, double>> word_to_document_freqs_;
     std::map<int, DocumentData> documents_;
     std::set<int> document_ids_;
 
+    // Дэк для хранения строк добавляемых документов
+    std::deque<std::string> document_;
+
     // Ключ - int id
     // Значение - map<string, double> (слово, частота в док-те)
-    std::map<int, std::map<std::string, double>> id_to_words_and_freqs_;
+    std::map<int, std::map<std::string_view, double>> id_to_words_and_freqs_;
 
     // Возвращает true, если строка является стоп-словом
-    bool IsStopWord(const std::string& word) const;
+    bool IsStopWord(std::string_view word) const;
 
     // Возвращает true, если строка не содержит спец-символы
-    static bool IsValidWord(const std::string& word);
+    static bool IsValidWord(std::string_view word);
 
     // Возвращает вектор строк без стоп-слов
-    std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
+    std::vector<std::string_view> SplitIntoWordsNoStop(std::string_view text) const;
 
     // Расчитывает средний рейтинг
     static int ComputeAverageRating(const std::vector<int>& ratings);
 
     struct QueryWord {
-        std::string data;
+        std::string_view data;
         bool is_minus;
         bool is_stop;
     };
 
     // Присваивает слову статус минус или плюс слова
-    QueryWord ParseQueryWord(const std::string& text) const;
+    QueryWord ParseQueryWord(std::string_view text) const;
 
     struct Query {
-        std::set<std::string> plus_words;
-        std::set<std::string> minus_words;
+        std::vector<std::string_view> plus_words;
+        std::vector<std::string_view> minus_words;
     };
 
     // Возвращает структуру с словарями плюс и минус слов
-    Query ParseQuery(const std::string& text) const;
+    Query ParseQuery(std::string_view text, bool skip_sorting = false) const;
 
     // Возвращает IDF
-    double ComputeWordInverseDocumentFreq(const std::string& word) const;
+    double ComputeWordInverseDocumentFreq(std::string_view word) const;
 
     // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
     // согласно условию функции-предиката
     template <typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const Query& query,
         DocumentPredicate document_predicate) const;
+
+    // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
+    // согласно условию функции-предиката с параллельной политикой исполнения
+    template <typename DocumentPredicate>
+    std::vector<Document> FindAllDocuments(const std::execution::parallel_policy&, 
+        const Query& query, DocumentPredicate document_predicate) const;
 };
 
 // Шаблонный контруктор проверяет и добавляет стоп-слова из шаблонного контейнера
@@ -129,10 +179,10 @@ SearchServer::SearchServer(const StringContainer& stop_words)
 
 // Шаблонный метод ищет документы по предикату
 template <typename DocumentPredicate>
-std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query,
+std::vector<Document> SearchServer::FindTopDocuments(std::string_view raw_query,
     DocumentPredicate document_predicate) const {
-    //LOG_DURATION_STREAM("Operation time", std::cout);
-    const auto query = ParseQuery(raw_query);
+    std::string string_raw_query{ raw_query };
+    const auto query = ParseQuery(string_raw_query);
 
     auto matched_documents = FindAllDocuments(query, document_predicate);
 
@@ -152,13 +202,46 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
     return matched_documents;
 }
 
+// Шаблонный метод ищет документы по предикату с заданной политикой исполнения (последовательной)
+template <typename DocumentPredicate>
+std::vector<Document> SearchServer::FindTopDocuments(const std::execution::sequenced_policy&,
+    std::string_view raw_query, DocumentPredicate document_predicate) const {
+    return SearchServer::FindTopDocuments(raw_query, document_predicate);
+}
+
+// Шаблонный метод ищет документы по предикату с заданной политикой исполнения(параллельной)
+template <typename DocumentPredicate>
+std::vector<Document> SearchServer::FindTopDocuments(const std::execution::parallel_policy& policy, std::string_view raw_query,
+    DocumentPredicate document_predicate) const {
+    std::string string_raw_query{ raw_query };
+    const auto query = ParseQuery(string_raw_query);
+
+    auto matched_documents = FindAllDocuments(policy, query, document_predicate);
+
+    sort(matched_documents.begin(), matched_documents.end(),
+        [](const Document& lhs, const Document& rhs) {
+            if (std::abs(lhs.relevance - rhs.relevance) < DOUBLE_ACCURACY) {
+                return lhs.rating > rhs.rating;
+            }
+            else {
+                return lhs.relevance > rhs.relevance;
+            }
+        });
+
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
+        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+    }
+
+    return matched_documents;
+}
+
 // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
 // согласно условию функции-предиката
 template <typename DocumentPredicate>
 std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
     DocumentPredicate document_predicate) const {
     std::map<int, double> document_to_relevance;
-    for (const std::string& word : query.plus_words) {
+    for (std::string_view word : query.plus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -171,7 +254,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
         }
     }
 
-    for (const std::string& word : query.minus_words) {
+    for (std::string_view word : query.minus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
             continue;
         }
@@ -185,5 +268,48 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
         matched_documents.push_back(
             { document_id, relevance, documents_.at(document_id).rating });
     }
+    return matched_documents;
+}
+
+// Возвращает вектор всех найденных по запросу документов без стоп и минус слов
+// согласно условию функции-предиката с параллельной политикой исполнения
+template <typename DocumentPredicate>
+std::vector<Document> SearchServer::FindAllDocuments(const std::execution::parallel_policy&,
+    const Query& query, DocumentPredicate document_predicate) const {
+    ConcurrentMap<int, double> document_to_relevance(document_ids_.size() / 4);
+
+    for_each(std::execution::par, query.plus_words.begin(), query.plus_words.end(),
+        [&](std::string_view word) {
+            if (word_to_document_freqs_.find(word) == word_to_document_freqs_.end()) {
+                return;
+            }
+
+            const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
+            for (const auto& [document_id, term_freq] : word_to_document_freqs_.at(word)) {
+                const auto& document_data = documents_.at(document_id);
+                if (document_predicate(document_id, document_data.status, document_data.rating)) {
+                    document_to_relevance[document_id].ref_to_value += term_freq * inverse_document_freq;
+                }
+            }
+        });
+
+    for_each(std::execution::par, query.minus_words.begin(), query.minus_words.end(),
+        [&](std::string_view word) {
+            if (word_to_document_freqs_.find(word) == word_to_document_freqs_.end()) {
+                return;
+            }
+
+            for (const auto& [document_id, _] : word_to_document_freqs_.at(word)) {
+                document_to_relevance.Delete(document_id);
+            }
+        });
+
+
+    std::vector<Document> matched_documents;
+    for (const auto [document_id, relevance] : document_to_relevance.BuildOrdinaryMap()) {
+        matched_documents.push_back(
+            { document_id, relevance, documents_.at(document_id).rating });
+    }
+
     return matched_documents;
 }

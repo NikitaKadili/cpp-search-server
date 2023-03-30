@@ -8,13 +8,13 @@
 void RemoveDuplicates(SearchServer& search_server) {
     using namespace std;
 
-    map<set<string>, int> words_to_ids; // Храним уже проверенные слова и id
+    map<set<string_view>, int> words_to_ids; // Храним уже проверенные слова и id
     vector<int> ids_to_remove; // id дубликатов
     for (int id : search_server) {
-        set<string> words;
+        set<string_view> words;
         const auto word_frequencies = search_server.GetWordFrequencies(id);
-        for (const auto& [word, _] : word_frequencies) {
-            words.insert(word);
+        for (const auto& word_to_freq : word_frequencies) {
+            words.insert(word_to_freq.first);
         }
         if (words_to_ids.count(words) != 0) {
             cout << "Found duplicate document id "s << id << endl;
