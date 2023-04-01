@@ -50,33 +50,6 @@ vector<Document> SearchServer::FindTopDocuments(string_view raw_query) const {
     return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
 
-// Поиск документов с заданным статусом с заданной политикой исполнения (последовательной)
-vector<Document> SearchServer::FindTopDocuments(const execution::sequenced_policy&, 
-    string_view raw_query, DocumentStatus status) const {
-    return SearchServer::FindTopDocuments(raw_query, status);
-}
-
-// Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения (последовательной)
-vector<Document> SearchServer::FindTopDocuments(const execution::sequenced_policy&, 
-    string_view raw_query) const {
-    return SearchServer::FindTopDocuments(raw_query);
-}
-
-// Поиск документов с заданным статусом с заданной политикой исполнения (параллельной)
-vector<Document> SearchServer::FindTopDocuments(const execution::parallel_policy& policy,
-    string_view raw_query, DocumentStatus status) const {
-    return SearchServer::FindTopDocuments(policy,
-        raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
-            return document_status == status;
-        });
-}
-
-// Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения (параллельной)
-vector<Document> SearchServer::FindTopDocuments(const execution::parallel_policy& policy,
-    string_view raw_query) const {
-    return FindTopDocuments(policy, raw_query, DocumentStatus::ACTUAL);
-}
-
 // Возвращает кол-во документов
 int SearchServer::GetDocumentCount() const {
     return static_cast<int>(documents_.size());
@@ -93,7 +66,7 @@ set<int>::iterator SearchServer::end() {
 }
 
 // Сверяет запрос с конкретным документом, возвращает совпавшие слова и статус документа
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(string_view raw_query,
+SearchServer::MatchResult SearchServer::MatchDocument(string_view raw_query,
     int document_id) const {
     const auto query = ParseQuery(raw_query);
 
@@ -118,14 +91,14 @@ tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(string_vi
 
 // Сверяет запрос с конкретным документом с заданной политикой исполнения (последовательной),
 // возвращает совпавшие слова и статус документа
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(const execution::sequenced_policy&,
+SearchServer::MatchResult SearchServer::MatchDocument(const execution::sequenced_policy&,
     string_view raw_query, int document_id) const {
     return MatchDocument(raw_query, document_id);
 }
 
 // Сверяет запрос с конкретным документом с заданной политикой исполнения (параллельной),
 // возвращает совпавшие слова и статус документа
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(const execution::parallel_policy&,
+SearchServer::MatchResult SearchServer::MatchDocument(const execution::parallel_policy&,
     string_view raw_query, int document_id) const {
     const auto query = ParseQuery(raw_query, true);
     const auto& status = documents_.at(document_id).status;
