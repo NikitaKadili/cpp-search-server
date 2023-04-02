@@ -53,16 +53,16 @@ public:
 
     // Шаблонный метод ищет документы по предикату с заданной политикой исполнения
     template <typename DocumentPredicate, typename Policy>
-    std::vector<Document> FindTopDocuments(Policy& policy, std::string_view raw_query,
+    std::vector<Document> FindTopDocuments(const Policy policy, std::string_view raw_query,
         DocumentPredicate document_predicate) const;
 
     // Поиск документов с заданным статусом с заданной политикой исполнения
     template <typename Policy>
-    std::vector<Document> FindTopDocuments(Policy& policy, std::string_view raw_query, DocumentStatus status) const;
+    std::vector<Document> FindTopDocuments(const Policy policy, std::string_view raw_query, DocumentStatus status) const;
 
     // Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения
     template <typename Policy>
-    std::vector<Document> FindTopDocuments(Policy& policy, std::string_view raw_query) const;
+    std::vector<Document> FindTopDocuments(const Policy policy, std::string_view raw_query) const;
 
     // Возвращает кол-во документов
     int GetDocumentCount() const;
@@ -155,6 +155,12 @@ private:
         DocumentPredicate document_predicate) const;
 
     // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
+    // согласно условию функции-предиката с последовательной политикой исполнения
+    template <typename DocumentPredicate>
+    std::vector<Document> FindAllDocuments(const std::execution::sequenced_policy&,
+        const Query& query, DocumentPredicate document_predicate) const;
+
+    // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
     // согласно условию функции-предиката с параллельной политикой исполнения
     template <typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const std::execution::parallel_policy&, 
@@ -199,18 +205,12 @@ std::vector<Document> SearchServer::FindTopDocuments(std::string_view raw_query,
 
 // Шаблонный метод ищет документы по предикату с заданной политикой исполнения
 template <typename DocumentPredicate, typename Policy>
-std::vector<Document> SearchServer::FindTopDocuments(Policy& policy,
+std::vector<Document> SearchServer::FindTopDocuments(const Policy policy,
     std::string_view raw_query, DocumentPredicate document_predicate) const {
-    if (!std::is_same_v<std::decay_t<Policy>, std::execution::parallel_policy>) {
-        // Ветка для последовательного исполнения
-        return SearchServer::FindTopDocuments(raw_query, document_predicate);
-    }
-    
-    // Ветка для параллельного исполнения
     std::string string_raw_query{ raw_query };
     const auto query = ParseQuery(string_raw_query);
 
-    auto matched_documents = FindAllDocuments(std::execution::par, query, document_predicate);
+    auto matched_documents = FindAllDocuments(policy, query, document_predicate);
 
     sort(matched_documents.begin(), matched_documents.end(),
         [](const Document& lhs, const Document& rhs) {
@@ -229,33 +229,21 @@ std::vector<Document> SearchServer::FindTopDocuments(Policy& policy,
     return matched_documents;
 }
 
-// Поиск документов с заданным статусом с заданной политикой исполнения (последовательной)
+// Поиск документов с заданным статусом с заданной политикой исполнения
 template <typename Policy>
-std::vector<Document> SearchServer::FindTopDocuments(Policy& policy,
+std::vector<Document> SearchServer::FindTopDocuments(const Policy policy,
     std::string_view raw_query, DocumentStatus status) const {
-    if (!std::is_same_v<std::decay_t<Policy>, std::execution::parallel_policy>) {
-        // Ветка для последовательного исполнения
-        return SearchServer::FindTopDocuments(raw_query, status);
-    }
-
-    // Ветка для параллельного исполнения
-    return SearchServer::FindTopDocuments(std::execution::par,
+    return SearchServer::FindTopDocuments(policy,
         raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
             return document_status == status;
         });
 }
 
-// Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения (последовательной)
+// Поиск документов по умолчанию (только актуальные) с заданной политикой исполнения
 template <typename Policy>
-std::vector<Document> SearchServer::FindTopDocuments(Policy& policy,
+std::vector<Document> SearchServer::FindTopDocuments(const Policy policy,
     std::string_view raw_query) const {
-    if (!std::is_same_v<std::decay_t<Policy>, std::execution::parallel_policy>) {
-        // Ветка для последовательного исполнения
-        return SearchServer::FindTopDocuments(raw_query);
-    }
-
-    // Ветка для параллельного исполнения
-    return FindTopDocuments(std::execution::par, raw_query, DocumentStatus::ACTUAL);
+    return FindTopDocuments(policy, raw_query, DocumentStatus::ACTUAL);
 }
 
 // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
@@ -292,6 +280,14 @@ std::vector<Document> SearchServer::FindAllDocuments(const Query& query,
             { document_id, relevance, documents_.at(document_id).rating });
     }
     return matched_documents;
+}
+
+// Возвращает вектор всех найденных по запросу документов без стоп и минус слов
+// согласно условию функции-предиката с последовательной политикой исполнения
+template <typename DocumentPredicate>
+std::vector<Document> SearchServer::FindAllDocuments(const std::execution::sequenced_policy&,
+    const Query& query, DocumentPredicate document_predicate) const {
+    return SearchServer::FindAllDocuments(query, document_predicate);
 }
 
 // Возвращает вектор всех найденных по запросу документов без стоп и минус слов
